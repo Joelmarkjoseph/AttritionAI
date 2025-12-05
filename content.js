@@ -16,12 +16,10 @@
           <div class="attritionai-chat-header">
             <div class="attritionai-header-content">
               <div class="attritionai-avatar">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
-                </svg>
+                <img src="${chrome.runtime.getURL('icons/icon48.png')}" alt="AttritionBot" />
               </div>
               <div class="attritionai-header-info">
-                <h1>AttritionAI</h1>
+                <h1>AttritionBot</h1>
                 <span class="attritionai-status">Online</span>
               </div>
             </div>
@@ -37,8 +35,10 @@
             <div class="attritionai-welcome-message">
               <div class="attritionai-bot-message">
                 <div class="attritionai-message-bubble attritionai-bot">
-                  <p>Welcome to AttritionAI!</p>
-                  <p>I'm here to help you analyze attrition data. Just enter a User ID and I'll fetch the insights for you.</p>
+                  <p>Welcome to AttritionBot!</p>
+                  <p>I can help you with:</p>
+                  <p><br>1. View employee details:<br>   Example: 103271</p>
+                  <p><br>2. Get termination recommendation:<br>   Example: Risk analysis of 103271</p>
                 </div>
               </div>
             </div>
@@ -50,7 +50,7 @@
               <input 
                 type="text" 
                 id="attritionai-userid" 
-                placeholder="Enter User ID and press Enter..." 
+                placeholder="Enter User ID or 'Risk analysis of [ID]'..." 
                 class="attritionai-user-id-input"
               />
               <button id="attritionai-send" class="attritionai-send-button">
@@ -202,10 +202,10 @@
     }
 
     async sendMessage() {
-      const userId = this.userIdInput.value.trim();
+      const input = this.userIdInput.value.trim();
 
-      if (!userId) {
-        this.addBotMessage('Please enter a User ID.', true);
+      if (!input) {
+        this.addBotMessage('Please enter a User ID or query.', true);
         return;
       }
 
@@ -214,10 +214,23 @@
         return;
       }
 
-      this.addUserMessage(`User ID: ${userId}`);
-      this.userIdInput.value = '';
-      this.showTypingIndicator();
-      await this.makeAPIRequest(userId, '');
+      // Check if it's a risk analysis query
+      const riskAnalysisPattern = /risk\s+analysis\s+of\s+(\d+)/i;
+      const match = input.match(riskAnalysisPattern);
+
+      if (match) {
+        const userId = match[1];
+        this.addUserMessage(`Risk analysis of ${userId}`);
+        this.userIdInput.value = '';
+        this.showTypingIndicator();
+        await this.makeRiskAnalysisRequest(userId);
+      } else {
+        // Regular user ID query
+        this.addUserMessage(`User ID: ${input}`);
+        this.userIdInput.value = '';
+        this.showTypingIndicator();
+        await this.makeAPIRequest(input, false);
+      }
     }
 
     addUserMessage(text) {
@@ -270,29 +283,102 @@
       if (indicator) indicator.remove();
     }
 
-    async makeAPIRequest(userId, message) {
+    async makeAPIRequest(userId, isRiskAnalysis = false) {
       try {
         // Send request to background script to avoid CORS issues
         const response = await chrome.runtime.sendMessage({
           action: 'makeAPIRequest',
           config: this.config,
           userId: userId,
-          message: message
+          isRiskAnalysis: isRiskAnalysis
         });
 
         if (response.success) {
-          const formattedResponse = this.formatResponse(response.data);
-          this.addBotMessage(formattedResponse);
+          if (isRiskAnalysis) {
+            return response.data; // Return raw data for risk analysis
+          } else {
+            const formattedResponse = this.formatResponse(response.data);
+            this.addBotMessage(formattedResponse);
+          }
         } else {
           throw new Error(response.error);
         }
         
       } catch (error) {
         console.error('API Error:', error);
-        this.addBotMessage(
-          `Error: ${error.message}\n\nPlease check your configuration and try again.`,
-          true
-        );
+        
+        // Check if it's a server error
+        if (error.message.includes('500') || error.message.toLowerCase().includes('internal server error')) {
+          this.addBotMessage(
+            'There seems to be an issue with the server. Please try again with a different User ID or contact your administrator.',
+            true
+          );
+        } else {
+          this.addBotMessage(
+            `Error: ${error.message}\n\nPlease check your configuration and try again.`,
+            true
+          );
+        }
+        return null;
+      }
+    }
+
+    async makeRiskAnalysisRequest(userId) {
+      try {
+        const data = await this.makeAPIRequest(userId, true);
+        
+        if (!data) {
+          return; // Error already handled
+        }
+
+        // Extract risk of loss value
+        let riskOfLoss = null;
+        
+        // Navigate through nested structure
+        if (data.User && data.User.User && data.User.User.riskOfLoss) {
+          riskOfLoss = data.User.User.riskOfLoss;
+        } else if (data.User && data.User.riskOfLoss) {
+          riskOfLoss = data.User.riskOfLoss;
+        } else if (data.riskOfLoss) {
+          riskOfLoss = data.riskOfLoss;
+        }
+
+        // Clean up the risk value
+        if (riskOfLoss) {
+          riskOfLoss = riskOfLoss.replace('rol_', '').toLowerCase();
+        }
+
+        // Generate recommendation
+        let recommendation = '';
+        if (!riskOfLoss) {
+          recommendation = 'Incomplete data - could not find risk of loss';
+        } else if (riskOfLoss === 'low') {
+          recommendation = `We can terminate this employee ${userId}`;
+        } else if (riskOfLoss === 'medium') {
+          recommendation = `Please do think of Terminating this employee ${userId}`;
+        } else if (riskOfLoss === 'high') {
+          recommendation = `We should not terminate this employee ${userId}`;
+        } else {
+          recommendation = `Risk of Loss: ${riskOfLoss}\n\nUnable to provide recommendation for this risk level.`;
+        }
+
+        this.addBotMessage(recommendation);
+        
+      } catch (error) {
+        console.error('Risk Analysis Error:', error);
+        
+        // Check if it's a server error
+        if (error.message.includes('500') || error.message.toLowerCase().includes('internal server error')) {
+          this.addBotMessage(
+            'There seems to be an issue with the server. Please try again with a different User ID or contact your administrator.',
+            true
+          );
+        } else {
+          this.addBotMessage(
+            `Error performing risk analysis: ${error.message}`,
+            true
+          );
+        }
       }
     }
 
