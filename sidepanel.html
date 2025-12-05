@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AttritionAI</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="chat-container">
+    <!-- Header -->
+    <div class="chat-header">
+      <div class="header-content">
+        <div class="avatar">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+          </svg>
+        </div>
+        <div class="header-info">
+          <h1>AttritionAI</h1>
+          <span class="status">Online</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages Area -->
+    <div class="messages-container" id="messagesContainer">
+      <div class="welcome-message">
+        <div class="bot-message">
+          <div class="message-bubble bot">
+            <p>👋 Welcome to AttritionAI!</p>
+            <p>I'm here to help you analyze attrition data. Just type your user ID and question, and I'll fetch the insights for you.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-container">
+      <div class="input-wrapper">
+        <input 
+          type="text" 
+          id="userIdInput" 
+          placeholder="User ID" 
+          class="user-id-input"
+        />
+        <input 
+          type="text" 
+          id="messageInput" 
+          placeholder="Type your message..." 
+          class="message-input"
+        />
+        <button id="sendButton" class="send-button">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Configuration Modal -->
+  <div id="configModal" class="modal">
+    <div class="modal-content">
+      <h2>⚙️ Configuration Required</h2>
+      <p>Please provide your API credentials to get started:</p>
+      
+      <div class="form-group">
+        <label for="endpointUrl">Endpoint URL</label>
+        <input type="text" id="endpointUrl" placeholder="https://api.example.com/endpoint" />
+      </div>
+      
+      <div class="form-group">
+        <label for="clientId">Client ID</label>
+        <input type="text" id="clientId" placeholder="Your client ID" />
+      </div>
+      
+      <div class="form-group">
+        <label for="clientSecret">Client Secret</label>
+        <input type="password" id="clientSecret" placeholder="Your client secret" />
+      </div>
+      
+      <div class="modal-actions">
+        <button id="saveConfig" class="save-button">Save Configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
