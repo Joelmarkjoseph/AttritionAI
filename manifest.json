@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "AttritionBot",
+    "name": "SFIntegrationBot",
     "version": "1.0.0",
     "description": "AI-powered attrition analysis assistant with WhatsApp-themed interface",
     "permissions": [
@@ -12,7 +12,7 @@
         "<all_urls>"
     ],
     "action": {
-        "default_title": "Toggle AttritionBot",
+        "default_title": "Toggle SFIntegrationBot",
         "default_icon": {
             "16": "icons/icon16.png",
             "32": "icons/icon32.png",

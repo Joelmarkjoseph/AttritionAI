@@ -1,4 +1,4 @@
-// Background service worker for AttritionBot
+// Background service worker for SFIntegrationBot
 chrome.action.onClicked.addListener(async (tab) => {
   // Check if the tab URL contains 'successfactors'
   if (tab.url && tab.url.includes('successfactors')) {
@@ -26,7 +26,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        alert('AttritionBot only works on SuccessFactors pages.\n\nPlease navigate to a page with "successfactors" in the URL.');
+        alert('SFIntegrationBot only works on SuccessFactors pages.\n\nPlease navigate to a page with "successfactors" in the URL.');
       }
     });
   }

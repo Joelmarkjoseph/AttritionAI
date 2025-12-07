@@ -16,10 +16,10 @@
           <div class="attritionai-chat-header">
             <div class="attritionai-header-content">
               <div class="attritionai-avatar">
-                <img src="${chrome.runtime.getURL('icons/icon48.png')}" alt="AttritionBot" />
+                <img src="${chrome.runtime.getURL('icons/icon48.png')}" alt="SFIntegrationBot" />
               </div>
               <div class="attritionai-header-info">
-                <h1>AttritionBot</h1>
+                <h1>SFIntegrationBot</h1>
                 <span class="attritionai-status">Online</span>
               </div>
             </div>
@@ -34,8 +34,11 @@
           <div class="attritionai-messages-container" id="attritionai-messages">
             <div class="attritionai-welcome-message">
               <div class="attritionai-bot-message">
+                <div class="attritionai-bot-avatar">
+                  <img src="${chrome.runtime.getURL('icons/icon48.png')}" alt="Bot" />
+                </div>
                 <div class="attritionai-message-bubble attritionai-bot">
-                  <p>Welcome to AttritionBot!</p>
+                  <p>Welcome to SFIntegrationBot!</p>
                   <p>I can help you with:</p>
                   <p><br>1. View employee details:<br>   Example: 103271</p>
                   <p><br>2. Get termination recommendation:<br>   Example: Risk analysis of 103271</p>
@@ -163,8 +166,8 @@
 
     async loadConfig() {
       try {
-        const result = await chrome.storage.local.get(['attritionAIConfig']);
-        this.config = result.attritionAIConfig || null;
+        const result = await chrome.storage.local.get(['sfIntegrationBotConfig']);
+        this.config = result.sfIntegrationBotConfig || null;
       } catch (error) {
         console.error('Error loading config:', error);
       }
@@ -193,7 +196,7 @@
       this.config = { endpointUrl, clientId, clientSecret };
       
       try {
-        await chrome.storage.local.set({ attritionAIConfig: this.config });
+        await chrome.storage.local.set({ sfIntegrationBotConfig: this.config });
         this.configModal.classList.remove('attritionai-show');
         this.addBotMessage('Configuration saved successfully! You can now start chatting.');
       } catch (error) {
@@ -214,19 +217,20 @@
         return;
       }
 
-      // Check if it's a risk analysis query
-      const riskAnalysisPattern = /risk\s+analysis\s+of\s+(\d+)/i;
-      const match = input.match(riskAnalysisPattern);
+      // Check if it's a risk analysis query - look for "risk" keyword and extract 6-digit ID
+      const hasRiskKeyword = /risk/i.test(input);
+      const sixDigitIdMatch = input.match(/\b(\d{6})\b/);
 
-      if (match) {
-        const userId = match[1];
-        this.addUserMessage(`Risk analysis of ${userId}`);
+      if (hasRiskKeyword && sixDigitIdMatch) {
+        const userId = sixDigitIdMatch[1];
+        // Display the original user input
+        this.addUserMessage(input);
         this.userIdInput.value = '';
         this.showTypingIndicator();
         await this.makeRiskAnalysisRequest(userId);
       } else {
         // Regular user ID query
-        this.addUserMessage(`User ID: ${input}`);
+        this.addUserMessage(input);
         this.userIdInput.value = '';
         this.showTypingIndicator();
         await this.makeAPIRequest(input, false);
@@ -252,6 +256,9 @@
       const messageDiv = document.createElement('div');
       messageDiv.className = 'attritionai-bot-message';
       messageDiv.innerHTML = `
+        <div class="attritionai-bot-avatar">
+          <img src="${chrome.runtime.getURL('icons/icon48.png')}" alt="Bot" />
+        </div>
         <div class="attritionai-message-bubble attritionai-bot ${isError ? 'attritionai-error-message' : ''}">
           <p>${this.escapeHtml(text)}</p>
           <div class="attritionai-message-time">${this.getCurrentTime()}</div>
@@ -266,6 +273,9 @@
       typingDiv.className = 'attritionai-bot-message attritionai-typing-indicator-container';
       typingDiv.id = 'attritionai-typing';
       typingDiv.innerHTML = `
+        <div class="attritionai-bot-avatar">
+          <img src="${chrome.runtime.getURL('icons/icon48.png')}" alt="Bot" />
+        </div>
         <div class="attritionai-message-bubble attritionai-bot">
           <div class="attritionai-typing-indicator">
             <div class="attritionai-typing-dot"></div>
@@ -323,43 +333,122 @@
       }
     }
 
-    async makeRiskAnalysisRequest(userId) {
+    async makeRiskAnalysisRequest(requestedUserId) {
       try {
-        const data = await this.makeAPIRequest(userId, true);
+        const data = await this.makeAPIRequest(requestedUserId, true);
         
         if (!data) {
           return; // Error already handled
         }
 
-        // Extract risk of loss value
-        let riskOfLoss = null;
-        
-        // Navigate through nested structure
-        if (data.User && data.User.User && data.User.User.riskOfLoss) {
-          riskOfLoss = data.User.User.riskOfLoss;
-        } else if (data.User && data.User.riskOfLoss) {
-          riskOfLoss = data.User.riskOfLoss;
-        } else if (data.riskOfLoss) {
-          riskOfLoss = data.riskOfLoss;
-        }
-
-        // Clean up the risk value
-        if (riskOfLoss) {
-          riskOfLoss = riskOfLoss.replace('rol_', '').toLowerCase();
-        }
-
-        // Generate recommendation
-        let recommendation = '';
-        if (!riskOfLoss) {
-          recommendation = 'Incomplete data - could not find risk of loss';
-        } else if (riskOfLoss === 'low') {
-          recommendation = `We can terminate this employee ${userId}`;
-        } else if (riskOfLoss === 'medium') {
-          recommendation = `Please do think of Terminating this employee ${userId}`;
-        } else if (riskOfLoss === 'high') {
-          recommendation = `We should not terminate this employee ${userId}`;
+        // Extract employee data from nested structure
+        let employee = null;
+        if (data.User && data.User.User) {
+          employee = data.User.User;
+        } else if (data.User) {
+          employee = data.User;
         } else {
-          recommendation = `Risk of Loss: ${riskOfLoss}\n\nUnable to provide recommendation for this risk level.`;
+          employee = data;
+        }
+
+        // Extract all relevant fields from the response
+        const userId = employee.userId || requestedUserId;
+        const name = employee.defaultFullName || 'Employee';
+        const empId = employee.empId || null;
+        const riskOfLoss = (employee.riskOfLoss || '').replace('rol_', '').toLowerCase();
+        const impactOfLoss = (employee.impactOfLoss || '').replace('iol_', '').toLowerCase();
+        const impactOfLossComments = employee.impactOfLossComments || null;
+        const directReports = employee.directReports || 0;
+        const age = employee.dateOfBirth ? this.calculateAge(new Date(employee.dateOfBirth)) : null;
+        const performance = employee.performance || null;
+        const potential = employee.potential || null;
+        const reviewFreq = employee.reviewFreq || null;
+        const seatingChart = employee.seatingChart || null;
+        const jobLevel = employee.jobLevel || null;
+        const futureLeader = employee.futureLeader || null;
+        const division = employee.division || null;
+        const criticalTalentComments = employee.criticalTalentComments || null;
+        const benchStrength = employee.benchStrength || null;
+        const avgRating = employee.externalCodeOfcust_AvgRatingscalcNav || null;
+
+        // Check if we have minimum required data
+        if (!riskOfLoss) {
+          this.addBotMessage('Incomplete data - could not find risk of loss', true);
+          return;
+        }
+
+        // Build the recommendation message in paragraph format
+        let recommendation = '';
+        const firstName = name.split(' ')[0];
+        
+        // Determine termination recommendation header
+        if (riskOfLoss === 'low') {
+          recommendation = `📊 Risk Analysis: ${name}\n\n✅ ${name} can be considered for termination based on the following assessment:\n\n`;
+        } else if (riskOfLoss === 'medium') {
+          recommendation = `📊 Risk Analysis: ${name}\n\n⚠️ ${name} requires careful evaluation before any termination decision:\n\n`;
+        } else if (riskOfLoss === 'high') {
+          recommendation = `📊 Risk Analysis: ${name}\n\n🛑 ${name} should NOT be terminated:\n\n`;
+        } else {
+          recommendation = `📊 Risk Analysis: ${name}\n\n`;
+        }
+
+        // Build comprehensive paragraph
+        let details = [];
+        
+        // Risk and impact
+        details.push(`The risk of loss is ${riskOfLoss} and impact of loss is ${impactOfLoss}`);
+        
+        // Reporting structure
+        if (directReports === 0 || directReports === '0') {
+          details.push(`${firstName} has no direct reports`);
+        } else if (directReports) {
+          details.push(`${firstName} manages ${directReports} team member${directReports > 1 ? 's' : ''}`);
+        }
+        
+        // Demographics and position
+        let positionInfo = [];
+        if (age) positionInfo.push(`${age} years old`);
+        if (jobLevel) positionInfo.push(`working as ${jobLevel}`);
+        if (division) positionInfo.push(`in ${division} division`);
+        if (positionInfo.length > 0) {
+          details.push(positionInfo.join(', '));
+        }
+        
+        // Performance
+        let perfInfo = [];
+        if (performance && performance !== '0' && performance !== '0.0') {
+          perfInfo.push(`performance rating of ${performance}`);
+        }
+        if (potential && potential !== '0' && potential !== '0.0') {
+          perfInfo.push(`potential rating of ${potential}`);
+        }
+        if (avgRating && avgRating !== '0' && avgRating !== '0.0') {
+          perfInfo.push(`average rating of ${avgRating}`);
+        }
+        if (perfInfo.length > 0) {
+          details.push(`${firstName} has ${perfInfo.join(', ')}`);
+        }
+        
+        // Additional considerations
+        if (futureLeader && futureLeader !== 'false' && futureLeader !== '0') {
+          details.push(`identified as a future leader`);
+        }
+        if (benchStrength && benchStrength.trim()) {
+          details.push(`bench strength is ${benchStrength}`);
+        }
+        if (seatingChart) {
+          details.push(`located at ${seatingChart}`);
+        }
+        
+        // Join all details into paragraph
+        recommendation += details.join('. ') + '.';
+        
+        // Add special comments if available
+        if (impactOfLossComments && impactOfLossComments.trim()) {
+          recommendation += `\n\n💬 Additional notes: ${impactOfLossComments}`;
+        }
+        if (criticalTalentComments && criticalTalentComments.trim()) {
+          recommendation += `\n\n⭐ Talent insights: ${criticalTalentComments}`;
         }
 
         this.addBotMessage(recommendation);
